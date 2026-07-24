@@ -203,12 +203,18 @@ EXCLUDE_KEYWORDS = [
 ]
 
 
-def is_equity_like(raw_name: str, raw_symbol: str = "") -> bool:
-    n = raw_name.upper()
+def _safe_str(val) -> str:
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return ""
+    return str(val)
+
+
+def is_equity_like(raw_name, raw_symbol="") -> bool:
+    n = _safe_str(raw_name).upper()
     if any(kw in n for kw in EXCLUDE_KEYWORDS):
         return False
     # Common ticker pattern for money-market / cash-sweep vehicles (e.g. FGXXX, SPAXX)
-    sym = (raw_symbol or "").strip().upper()
+    sym = _safe_str(raw_symbol).strip().upper()
     if re.fullmatch(r"[A-Z]{4,5}XX", sym):
         return False
     return True
@@ -219,27 +225,23 @@ STRIP_TOKENS = [
 ]
 
 
-def clean_company_name(raw_name: str) -> str:
-    n = raw_name.upper()
+def clean_company_name(raw_name) -> str:
+    n = _safe_str(raw_name).upper()
     for tok in STRIP_TOKENS:
         n = n.replace(tok, " ")
     n = re.sub(r"\b\d{6,}\b", " ", n)          # drop long numeric IDs
     n = re.sub(r"\b(NM|GS|LP|LTD|PLC)\b", " ", n)
     n = re.sub(r"[-]+", " ", n)
     n = re.sub(r"\s+", " ", n).strip()
-    return n.title()
-
-
-def is_equity_like(raw_name: str) -> bool:
-    n = raw_name.upper()
-    return not any(kw in n for kw in EXCLUDE_KEYWORDS)
+    return n.title() if n else "Unknown"
 
 
 def pick_symbol(symbols) -> str:
-    plain = [s for s in symbols if isinstance(s, str) and re.fullmatch(r"[A-Z.]{1,6}", s.strip())]
+    plain = [_safe_str(s) for s in symbols if re.fullmatch(r"[A-Z.]{1,6}", _safe_str(s).strip())]
     if plain:
         return sorted(plain, key=len)[0]
-    return str(symbols[0])
+    first = _safe_str(symbols[0]) if len(symbols) else ""
+    return first or "N/A"
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
