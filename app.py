@@ -195,9 +195,23 @@ RED = "#FF1E1E"
 BLUE = "#1E90FF"
 
 EXCLUDE_KEYWORDS = [
-    "GOVERNMENT OBLIGATIONS", "MONEY MARKET", "CASH COLLATERAL",
-    "TREASURY BILL", "REPURCHASE", "CASH & OTHER", "CASH AND OTHER",
+    "GOVERNMENT OBLIG", "GOVT OBLIG", "MONEY MARKET", "MONEY MKT",
+    "CASH COLLATERAL", "CASH MGMT", "CASH MANAGEMENT",
+    "TREASURY BILL", "TREASURY OBLIG", "REPURCHASE", "REPO",
+    "CASH & OTHER", "CASH AND OTHER", "INSTITUTIONAL FUND",
+    "FEDERAL FUND", "FIRST AMERICAN", "GOLDMAN SACHS FINANCIAL SQUARE",
 ]
+
+
+def is_equity_like(raw_name: str, raw_symbol: str = "") -> bool:
+    n = raw_name.upper()
+    if any(kw in n for kw in EXCLUDE_KEYWORDS):
+        return False
+    # Common ticker pattern for money-market / cash-sweep vehicles (e.g. FGXXX, SPAXX)
+    sym = (raw_symbol or "").strip().upper()
+    if re.fullmatch(r"[A-Z]{4,5}XX", sym):
+        return False
+    return True
 
 STRIP_TOKENS = [
     "SWAP-GOLD-L", "SWAP GOLD L", "TOTAL RETURN SWAP", "SWAP", "TRS",
@@ -261,7 +275,7 @@ def fetch_holdings(etf_ticker: str) -> pd.DataFrame:
     if df["Weight"].max() <= 1.0:
         df["Weight"] = df["Weight"] * 100
 
-    df = df[df["Name"].apply(is_equity_like)]
+    df = df[df.apply(lambda row: is_equity_like(row["Name"], row["Symbol"]), axis=1)]
     if df.empty:
         return df
 
@@ -384,21 +398,21 @@ if run:
     display_holdings = display_holdings[["Symbol", "Name", "Weight"]]
     st.dataframe(display_holdings, use_container_width=True, hide_index=True)
 
-    top8 = holdings.head(8).reset_index(drop=True)
+    top10 = holdings.head(10).reset_index(drop=True)
 
     st.markdown("### TOP HOLDINGS — PRICE CHARTS")
     mini_height = int(550 * 0.5)
 
     with st.spinner("FETCHING TOP HOLDING PRICE HISTORY..."):
         holding_series = {}
-        for _, row in top8.iterrows():
+        for _, row in top10.iterrows():
             sym = row["Symbol"]
             series = fetch_prices(sym, start_date, end_date)
             holding_series[sym] = (series, row["Name"], row["Weight"])
 
-    for i in range(0, len(top8), 2):
+    for i in range(0, len(top10), 2):
         cols = st.columns(2)
-        pair = top8.iloc[i:i + 2]
+        pair = top10.iloc[i:i + 2]
         for col, (_, row) in zip(cols, pair.iterrows()):
             sym = row["Symbol"]
             series, name, weight = holding_series[sym]
